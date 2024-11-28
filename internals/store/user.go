@@ -58,7 +58,7 @@ func (s UserStore) GetUserByID(ctx context.Context, id int64) (*User, error) {
 	err := s.db.QueryRowContext(
 		ctx,
 		query,
-		userID,
+		id,
 	).Scan(
 		&user.ID,
 		&user.Email,
