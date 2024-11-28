@@ -10,12 +10,13 @@ import (
 
 type Post struct {
 	ID        int64     `json:"id"`
-	Content   string    `json:"content"`
 	Title     string    `json:"title"`
+	Content   string    `json:"content"`
 	UserID    int64     `json:"user_id"`
 	Tags      []string  `json:"tags"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	Comments  []Comment `json:"comments"`
 }
 
 type PostStore struct {
@@ -79,4 +80,42 @@ func (s *PostStore) GetPostByID(ctx context.Context, id int64) (*Post, error) {
 	}
 
 	return &post, nil
+}
+
+func (s *PostStore) Update(ctx context.Context, post *Post) error {
+
+	query := `
+		UPDATE posts 
+		SET title = $1, content = $2
+		WHERE id = $3
+	`
+
+	_, err := s.db.ExecContext(ctx, query, post.Title, post.Content, post.ID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *PostStore) Delete(ctx context.Context, id int64) error {
+
+	query := `
+		DELETE FROM posts WHERE id = $1
+	`
+	res, err := s.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if affected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
 }
