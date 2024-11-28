@@ -51,6 +51,9 @@ func (s UserStore) GetUserByID(ctx context.Context, userID int64) (*User, error)
 		FROM users
 		WHERE id = $1
 	`
+	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
+	defer cancel()
+
 	user := &User{}
 	err := s.db.QueryRowContext(
 		ctx,
