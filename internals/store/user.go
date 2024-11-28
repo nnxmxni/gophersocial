@@ -67,4 +67,6 @@ func (s UserStore) GetUserByID(ctx context.Context, userID int64) (*User, error)
 			return nil, err
 		}
 	}
+
+	return user, nil
 }
