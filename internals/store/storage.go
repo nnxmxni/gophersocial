@@ -23,6 +23,9 @@ type Storage struct {
 		Create(context.Context, *User) error
 		GetUserByID(context.Context, int64) (*User, error)
 	}
+	Comment interface {
+		GetByPostID(context.Context, int64) ([]Comment, error)
+	}
 }
 
 func NewStorage(db *sql.DB) Storage {
