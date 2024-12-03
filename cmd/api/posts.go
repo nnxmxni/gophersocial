@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/go-chi/chi/v5"
@@ -12,10 +13,19 @@ import (
 	"strconv"
 )
 
+type postKey string
+
+const postCtx postKey = "post"
+
 type createPostPayload struct {
 	Title   string   `json:"title" validate:"required"`
 	Content string   `json:"content" validate:"required"`
 	Tags    []string `json:"tags"`
+}
+
+type updatePostPayload struct {
+	Title   *string `json:"title" validate:"omitempty,max=100"`
+	Content *string `json:"content" validate:"omitempty,max=1000"`
 }
 
 func (app *application) createPostHandler(w http.ResponseWriter, r *http.Request) {
@@ -72,16 +82,70 @@ func (app *application) createPostHandler(w http.ResponseWriter, r *http.Request
 
 func (app *application) getPostHandler(w http.ResponseWriter, r *http.Request) {
 
-	postIDAsStr := chi.URLParam(r, "postID")
-	postIDAsInt, err := strconv.ParseInt(postIDAsStr, 10, 64)
+	post := getPostFromCtx(r)
+
+	comments, err := app.store.Comment.GetByPostID(r.Context(), post.ID)
 	if err != nil {
-		utils.WriteError(w, r, http.StatusBadRequest, fmt.Errorf("invalid post id - %s", postIDAsStr))
+		utils.WriteError(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	ctx := r.Context()
-	post, err := app.store.Posts.GetPostByID(ctx, postIDAsInt)
-	if err != nil {
+	post.Comments = comments
+
+	if err := utils.WriteJSON(w, r, http.StatusOK, types.APIResponseBody{
+		Status:  true,
+		Message: "Post retrieved successfully",
+		Data:    post,
+	}); err != nil {
+		utils.WriteError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+}
+
+func (app *application) updatePostHandler(w http.ResponseWriter, r *http.Request) {
+
+	post := getPostFromCtx(r)
+
+	var payload updatePostPayload
+
+	if err := utils.ParseJSON(w, r, &payload); err != nil {
+		utils.WriteError(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := utils.Validate.Struct(&payload); err != nil {
+		utils.WriteError(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	if payload.Content != nil {
+		post.Content = *payload.Content
+	}
+
+	if payload.Title != nil {
+		post.Title = *payload.Title
+	}
+
+	if err := app.store.Posts.Update(r.Context(), post); err != nil {
+		utils.WriteError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	if err := utils.WriteJSON(w, r, http.StatusOK, types.APIResponseBody{
+		Status:  true,
+		Message: "Post updated successfully",
+		Data:    post,
+	}); err != nil {
+		utils.WriteError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+}
+
+func (app *application) deletePostHandler(w http.ResponseWriter, r *http.Request) {
+
+	post := getPostFromCtx(r)
+
+	if err := app.store.Posts.Delete(r.Context(), post.ID); err != nil {
 		switch {
 		case errors.Is(err, store.ErrNotFound):
 			utils.WriteError(w, r, http.StatusNotFound, err)
@@ -94,10 +158,42 @@ func (app *application) getPostHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := utils.WriteJSON(w, r, http.StatusOK, types.APIResponseBody{
 		Status:  true,
-		Message: "Post retrieved successfully",
-		Data:    post,
+		Message: "Post deleted successfully",
 	}); err != nil {
 		utils.WriteError(w, r, http.StatusInternalServerError, err)
 		return
 	}
+}
+
+func (app *application) postsContextMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		postIDAsStr := chi.URLParam(r, "postID")
+		postIDAsInt, err := strconv.ParseInt(postIDAsStr, 10, 64)
+		if err != nil {
+			utils.WriteError(w, r, http.StatusBadRequest, fmt.Errorf("invalid post id - %s", postIDAsStr))
+			return
+		}
+
+		ctx := r.Context()
+		post, err := app.store.Posts.GetPostByID(ctx, postIDAsInt)
+		if err != nil {
+			switch {
+			case errors.Is(err, store.ErrNotFound):
+				utils.WriteError(w, r, http.StatusNotFound, err)
+				return
+			default:
+				utils.WriteError(w, r, http.StatusInternalServerError, err)
+				return
+			}
+		}
+
+		ctx = context.WithValue(r.Context(), postCtx, post)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func getPostFromCtx(r *http.Request) *store.Post {
+	post, _ := r.Context().Value(postCtx).(*store.Post)
+	return post
 }
