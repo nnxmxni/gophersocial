@@ -127,3 +127,53 @@ func (s *PostStore) Delete(ctx context.Context, id int64) error {
 
 	return nil
 }
+
+func (s *PostStore) GetUserFeed(ctx context.Context, userID int64) ([]PostWithMetaData, error) {
+
+	query := `
+		SELECT p.id, p.user_id, p.title, p.content, p.tags, p.created_at, p.updated_at, u.id, u.email,
+       		COUNT(c.id) AS comments_count
+		FROM posts p
+		LEFT JOIN comments c ON p.id = c.post_id
+		LEFT JOIN users u ON p.user_id = u.id
+		JOIN followers f ON f.follower_id = p.user_id OR p.user_id = $1
+		WHERE f.user_id = $1 OR p.user_id = $1
+		GROUP BY p.id, p.user_id, p.title, p.content, p.tags, p.created_at, p.updated_at, u.id, u.email
+		ORDER BY p.created_at DESC
+	`
+
+	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var feed []PostWithMetaData
+	for rows.Next() {
+		var p PostWithMetaData
+		err := rows.Scan(
+			&p.ID,
+			&p.UserID,
+			&p.Title,
+			&p.Content,
+			pq.Array(&p.Tags),
+			&p.CreatedAt,
+			&p.UpdatedAt,
+			&p.User.ID,
+			&p.User.Email,
+			&p.CommentsCount,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		feed = append(feed, p)
+	}
+
+	return feed, nil
+}
