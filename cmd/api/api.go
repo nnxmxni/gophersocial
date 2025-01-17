@@ -3,20 +3,54 @@ package main
 import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/nnxmxni/gophersocial/internals/auth"
+	"github.com/nnxmxni/gophersocial/internals/ratelimiter"
 	"github.com/nnxmxni/gophersocial/internals/store"
+	"github.com/nnxmxni/gophersocial/internals/store/cache"
+	"go.uber.org/zap"
 	"log"
 	"net/http"
 	"time"
 )
 
 type application struct {
-	config config
-	store  store.Storage
+	config        config
+	store         store.Storage
+	cacheStorage  cache.Storage
+	logger        *zap.SugaredLogger
+	authenticator auth.Authenticator
+	rateLimiter   ratelimiter.Limiter
 }
 
 type config struct {
-	addr     string
-	dbConfig dbConfig
+	addr          string
+	OTPExpiration time.Duration
+	dbConfig      dbConfig
+	mail          mailConfig
+	auth          authConfig
+	redisCfg      redisConfig
+	rateLimiter   ratelimiter.Config
+}
+
+type redisConfig struct {
+	addr    string
+	pwd     string
+	db      int
+	enabled bool
+}
+
+type authConfig struct {
+	token tokenConfig
+}
+
+type tokenConfig struct {
+	secret string
+	exp    time.Duration
+	host   string
+}
+
+type mailConfig struct {
+	OTPExpiration time.Duration
 }
 
 type dbConfig struct {
