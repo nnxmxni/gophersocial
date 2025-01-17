@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-playground/validator/v10"
-	"github.com/nnxmxni/gophersocial/types"
 	"io"
 	"net/http"
 )
@@ -13,6 +12,7 @@ import (
 var Validate = validator.New()
 
 func ParseJSON(w http.ResponseWriter, r *http.Request, payload any) error {
+
 	if r.Body == nil {
 		return fmt.Errorf("the request body is empty")
 	}
@@ -32,18 +32,4 @@ func ParseJSON(w http.ResponseWriter, r *http.Request, payload any) error {
 	}
 
 	return nil
-}
-
-func WriteJSON(w http.ResponseWriter, r *http.Request, status int, response types.APIResponseBody) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	return json.NewEncoder(w).Encode(response)
-}
-
-func WriteError(w http.ResponseWriter, r *http.Request, status int, err error) {
-	response := types.APIResponseBody{
-		Status:  false,
-		Message: err.Error(),
-	}
-	_ = WriteJSON(w, r, status, response)
 }

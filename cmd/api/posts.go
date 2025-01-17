@@ -32,7 +32,7 @@ func (app *application) createPostHandler(w http.ResponseWriter, r *http.Request
 	var payload createPostPayload
 
 	if err := utils.ParseJSON(w, r, &payload); err != nil {
-		utils.WriteError(w, r, http.StatusBadRequest, err)
+		_ = app.WriteError(w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -53,7 +53,7 @@ func (app *application) createPostHandler(w http.ResponseWriter, r *http.Request
 			}
 		}
 
-		utils.WriteError(w, r, http.StatusUnprocessableEntity, errors.New(errorMessages[0]))
+		_ = app.WriteError(w, r, http.StatusUnprocessableEntity, errors.New(errorMessages[0]))
 		return
 	}
 
@@ -61,21 +61,21 @@ func (app *application) createPostHandler(w http.ResponseWriter, r *http.Request
 		Title:   payload.Title,
 		Content: payload.Content,
 		Tags:    payload.Tags,
-		UserID:  1,
+		UserID:  getUserFromContext(r).ID,
 	}
 
 	ctx := r.Context()
 	if err := app.store.Posts.Create(ctx, post); err != nil {
-		utils.WriteError(w, r, http.StatusInternalServerError, err)
+		_ = app.WriteError(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	if err := utils.WriteJSON(w, r, http.StatusCreated, types.APIResponseBody{
+	if err := app.WriteJSON(w, r, http.StatusCreated, types.APIResponseBody{
 		Status:  true,
 		Message: "Post created successfully",
 		Data:    post,
 	}); err != nil {
-		utils.WriteError(w, r, http.StatusInternalServerError, err)
+		_ = app.WriteError(w, r, http.StatusInternalServerError, err)
 		return
 	}
 }
@@ -86,18 +86,18 @@ func (app *application) getPostHandler(w http.ResponseWriter, r *http.Request) {
 
 	comments, err := app.store.Comment.GetByPostID(r.Context(), post.ID)
 	if err != nil {
-		utils.WriteError(w, r, http.StatusInternalServerError, err)
+		_ = app.WriteError(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	post.Comments = comments
 
-	if err := utils.WriteJSON(w, r, http.StatusOK, types.APIResponseBody{
+	if err := app.WriteJSON(w, r, http.StatusOK, types.APIResponseBody{
 		Status:  true,
 		Message: "Post retrieved successfully",
 		Data:    post,
 	}); err != nil {
-		utils.WriteError(w, r, http.StatusInternalServerError, err)
+		_ = app.WriteError(w, r, http.StatusInternalServerError, err)
 		return
 	}
 }
@@ -109,12 +109,12 @@ func (app *application) updatePostHandler(w http.ResponseWriter, r *http.Request
 	var payload updatePostPayload
 
 	if err := utils.ParseJSON(w, r, &payload); err != nil {
-		utils.WriteError(w, r, http.StatusBadRequest, err)
+		_ = app.WriteError(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	if err := utils.Validate.Struct(&payload); err != nil {
-		utils.WriteError(w, r, http.StatusBadRequest, err)
+		_ = app.WriteError(w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -127,16 +127,16 @@ func (app *application) updatePostHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := app.store.Posts.Update(r.Context(), post); err != nil {
-		utils.WriteError(w, r, http.StatusInternalServerError, err)
+		_ = app.WriteError(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	if err := utils.WriteJSON(w, r, http.StatusOK, types.APIResponseBody{
+	if err := app.WriteJSON(w, r, http.StatusOK, types.APIResponseBody{
 		Status:  true,
 		Message: "Post updated successfully",
 		Data:    post,
 	}); err != nil {
-		utils.WriteError(w, r, http.StatusInternalServerError, err)
+		_ = app.WriteError(w, r, http.StatusInternalServerError, err)
 		return
 	}
 }
@@ -148,19 +148,19 @@ func (app *application) deletePostHandler(w http.ResponseWriter, r *http.Request
 	if err := app.store.Posts.Delete(r.Context(), post.ID); err != nil {
 		switch {
 		case errors.Is(err, store.ErrNotFound):
-			utils.WriteError(w, r, http.StatusNotFound, err)
+			_ = app.WriteError(w, r, http.StatusNotFound, err)
 			return
 		default:
-			utils.WriteError(w, r, http.StatusInternalServerError, err)
+			_ = app.WriteError(w, r, http.StatusInternalServerError, err)
 			return
 		}
 	}
 
-	if err := utils.WriteJSON(w, r, http.StatusOK, types.APIResponseBody{
+	if err := app.WriteJSON(w, r, http.StatusOK, types.APIResponseBody{
 		Status:  true,
 		Message: "Post deleted successfully",
 	}); err != nil {
-		utils.WriteError(w, r, http.StatusInternalServerError, err)
+		_ = app.WriteError(w, r, http.StatusInternalServerError, err)
 		return
 	}
 }
@@ -171,7 +171,7 @@ func (app *application) postsContextMiddleware(next http.Handler) http.Handler {
 		postIDAsStr := chi.URLParam(r, "postID")
 		postIDAsInt, err := strconv.ParseInt(postIDAsStr, 10, 64)
 		if err != nil {
-			utils.WriteError(w, r, http.StatusBadRequest, fmt.Errorf("invalid post id - %s", postIDAsStr))
+			_ = app.WriteError(w, r, http.StatusBadRequest, fmt.Errorf("invalid post id - %s", postIDAsStr))
 			return
 		}
 
@@ -180,10 +180,10 @@ func (app *application) postsContextMiddleware(next http.Handler) http.Handler {
 		if err != nil {
 			switch {
 			case errors.Is(err, store.ErrNotFound):
-				utils.WriteError(w, r, http.StatusNotFound, err)
+				_ = app.WriteError(w, r, http.StatusNotFound, err)
 				return
 			default:
-				utils.WriteError(w, r, http.StatusInternalServerError, err)
+				_ = app.WriteError(w, r, http.StatusInternalServerError, err)
 				return
 			}
 		}

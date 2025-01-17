@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"github.com/lib/pq"
 )
 
@@ -18,19 +17,18 @@ type FollowStore struct {
 	db *sql.DB
 }
 
-func (s *FollowStore) Follow(ctx context.Context, userID int64, followerID int64) error {
+func (s *FollowStore) Follow(ctx context.Context, userID int64, toBeFollowedID int64) error {
 
 	query := `INSERT INTO followers(user_id, follower_id) VALUES ($1, $2)`
 
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
 	defer cancel()
 
-	_, err := s.db.ExecContext(ctx, query, userID, followerID)
+	_, err := s.db.ExecContext(ctx, query, toBeFollowedID, userID)
 
 	if err != nil {
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) {
-			fmt.Print(pqErr.Code)
 			if pqErr.Code == "23514" && pqErr.Constraint == "chk_user_not_self_follow" {
 				return ErrSelfFollow
 			}
@@ -45,14 +43,14 @@ func (s *FollowStore) Follow(ctx context.Context, userID int64, followerID int64
 	return nil
 }
 
-func (s *FollowStore) Unfollow(ctx context.Context, userID int64, followerID int64) error {
+func (s *FollowStore) Unfollow(ctx context.Context, userID int64, toBeUnfollowedID int64) error {
 
 	query := `DELETE FROM followers WHERE user_id = $1 AND follower_id = $2`
 
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
 	defer cancel()
 
-	_, err := s.db.ExecContext(ctx, query, userID, followerID)
+	_, err := s.db.ExecContext(ctx, query, toBeUnfollowedID, userID)
 
 	if err != nil {
 		return err

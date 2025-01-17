@@ -76,6 +76,9 @@ func (app *application) mount() http.Handler {
 		r.Get("/health", app.healthCheckHandler)
 
 		r.Route("/post", func(r chi.Router) {
+
+			r.Use(app.EnsureAuthMiddleware)
+
 			r.Post("/create", app.createPostHandler)
 
 			r.Route("/{postID}", func(r chi.Router) {
@@ -83,15 +86,18 @@ func (app *application) mount() http.Handler {
 				r.Use(app.postsContextMiddleware)
 
 				r.Get("/show", app.getPostHandler)
-				r.Patch("/update", app.updatePostHandler)
-				r.Delete("/delete", app.deletePostHandler)
+				r.Patch("/update", app.EnsurePostOwnership("moderator", app.updatePostHandler))
+				r.Delete("/delete", app.EnsurePostOwnership("admin", app.deletePostHandler))
 			})
 		})
 
 		r.Route("/users", func(r chi.Router) {
+
+			r.Put("/activate/{token}", app.activateUserHandler)
+
 			r.Route("/{userID}", func(r chi.Router) {
 
-				r.Use(app.userContextMiddleware)
+				r.Use(app.EnsureAuthMiddleware)
 
 				r.Get("/", app.getUserHandler)
 				r.Put("/follow", app.followUserHandler)
@@ -99,8 +105,15 @@ func (app *application) mount() http.Handler {
 			})
 
 			r.Group(func(r chi.Router) {
+				r.Use(app.EnsureAuthMiddleware)
+
 				r.Get("/feed", app.getUserFeedHandler)
 			})
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Post("/register", app.registerUserHandler)
+			r.Post("/login", app.loginUserHandler)
 		})
 	})
 
@@ -116,6 +129,8 @@ func (app *application) run(mux http.Handler) error {
 		ReadTimeout:  time.Second * 10,
 		IdleTimeout:  time.Minute,
 	}
+
+	app.logger.Infow("starting server", "addr", app.config.addr)
 
 	log.Printf("Server has started at %s", app.config.addr)
 
