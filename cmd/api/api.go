@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/nnxmxni/gophersocial/internals/auth"
@@ -8,8 +10,10 @@ import (
 	"github.com/nnxmxni/gophersocial/internals/store"
 	"github.com/nnxmxni/gophersocial/internals/store/cache"
 	"go.uber.org/zap"
-	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -130,9 +134,33 @@ func (app *application) run(mux http.Handler) error {
 		IdleTimeout:  time.Minute,
 	}
 
-	app.logger.Infow("starting server", "addr", app.config.addr)
+	shutdown := make(chan error)
 
-	log.Printf("Server has started at %s", app.config.addr)
+	go func() {
+		quit := make(chan os.Signal, 1)
 
-	return srv.ListenAndServe()
+		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+		s := <-quit
+
+		app.logger.Infof("Received signal %s, shutting down the server", s.String())
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		shutdown <- srv.Shutdown(ctx)
+	}()
+
+	app.logger.Infow("server is listening on", "addr", app.config.addr)
+	err := srv.ListenAndServe()
+	if !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+
+	app.logger.Infow("server has stopped gracefully")
+	err = <-shutdown
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
